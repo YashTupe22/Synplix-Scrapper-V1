@@ -18,6 +18,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def resolve_export_dir():
+    if os.getenv("VERCEL"):
+        vercel_tmp = os.path.join(tempfile.gettempdir(), "synplix_exports")
+        os.makedirs(vercel_tmp, exist_ok=True)
+        return vercel_tmp
+
     candidates = [
         os.path.join(BASE_DIR, "exports"),
         os.path.join(tempfile.gettempdir(), "synplix_exports"),
@@ -60,7 +65,20 @@ def generate():
             error="Max results must be a positive number.",
         )
 
-    leads = scrape_google_maps(query=query, max_results=max_results, headless=headless)
+    try:
+        leads = scrape_google_maps(query=query, max_results=max_results, headless=headless)
+    except Exception as exc:
+        app.logger.exception("Lead scraping failed")
+        return render_template(
+            "index.html",
+            leads=[],
+            csv_file="",
+            error=(
+                "Scraping could not start in this deployment environment. "
+                f"Details: {exc}"
+            ),
+        )
+
     if not leads:
         return render_template(
             "index.html",
@@ -72,7 +90,16 @@ def generate():
     safe_query = secure_filename(query.replace(" ", "_"))[:40] or "leads"
     filename = f"{safe_query}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}.csv"
     output_path = os.path.join(EXPORT_DIR, filename)
-    written_path = write_to_csv(leads, output_path)
+    try:
+        written_path = write_to_csv(leads, output_path)
+    except OSError as exc:
+        app.logger.exception("CSV write failed")
+        return render_template(
+            "index.html",
+            leads=[],
+            csv_file="",
+            error=f"Failed to save CSV export. Details: {exc}",
+        )
     csv_file = os.path.basename(written_path) if written_path else ""
 
     return render_template("index.html", leads=leads, csv_file=csv_file, error="")
