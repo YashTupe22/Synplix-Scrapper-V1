@@ -4,6 +4,7 @@ from datetime import datetime
 import os
 import random
 import re
+import shutil
 import time
 import urllib.parse
 
@@ -25,7 +26,16 @@ def setup_driver(headless=False):
     if os.getenv("FORCE_HEADLESS", "false").strip().lower() in {"1", "true", "yes", "on"}:
         headless = True
 
-    service = Service(ChromeDriverManager().install())
+    chromedriver_bin = os.getenv("CHROMEDRIVER_BIN", "").strip()
+    if chromedriver_bin and os.path.exists(chromedriver_bin):
+        service = Service(chromedriver_bin)
+    else:
+        system_chromedriver = shutil.which("chromedriver")
+        if system_chromedriver:
+            service = Service(system_chromedriver)
+        else:
+            service = Service(ChromeDriverManager().install())
+
     options = webdriver.ChromeOptions()
     chrome_bin = os.getenv("CHROME_BIN", "").strip()
     if chrome_bin and os.path.exists(chrome_bin):
