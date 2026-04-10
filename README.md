@@ -1,9 +1,9 @@
 # Synplix Leads Studio (Vercel Native)
 
-Production-ready Google Maps lead scraper built for Vercel using:
+Production-ready Google Maps lead generator built for Vercel using:
 
 - **Node.js serverless API** (`/api/generate`)
-- **Playwright Core + @sparticuz/chromium**
+- **Google Places API** (no browser runtime needed)
 - **Static frontend** (`/public`)
 - **In-memory CSV export** (no writable disk dependency)
 
@@ -59,14 +59,16 @@ http://localhost:3000
 
 1. Push to GitHub.
 2. Import project in Vercel.
-3. Deploy.
-4. On every major runtime/config change, use **Redeploy with Clear Build Cache**.
+3. Add environment variable:
+   - `GOOGLE_PLACES_API_KEY=<your_google_api_key>`
+4. Deploy.
+5. On major runtime/config changes, use **Redeploy with Clear Build Cache**.
 
 ## Runtime Notes
 
-- Uses headless Chromium in Vercel serverless.
+- Uses Google Places API calls from Vercel serverless.
 - `max_results` is capped for runtime safety.
-- Google Maps DOM can change; selector maintenance may be needed over time.
+- Requires Google Cloud billing + Places API enabled.
 
 ## Security Notes
 

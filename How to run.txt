@@ -10,8 +10,9 @@ Vercel-native setup (recommended):
 
 How it works:
 - Frontend is served from /public
-- API endpoint is /api/generate (Node.js + Playwright + @sparticuz/chromium)
+- API endpoint is /api/generate (Node.js + Google Places API)
 - CSV is generated in memory and downloaded from browser (no filesystem dependency)
 
 Important:
 - max_results is limited to 100 per request for runtime safety.
+- Set GOOGLE_PLACES_API_KEY in Vercel environment variables.

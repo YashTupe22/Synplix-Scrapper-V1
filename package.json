@@ -10,8 +10,5 @@
   "scripts": {
     "dev": "vercel dev"
   },
-  "dependencies": {
-    "@sparticuz/chromium": "^123.0.1",
-    "puppeteer-core": "^23.11.1"
-  }
+  "dependencies": {}
 }
