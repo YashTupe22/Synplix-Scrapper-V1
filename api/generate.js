@@ -1,5 +1,5 @@
 const chromium = require("@sparticuz/chromium");
-const { chromium: playwrightChromium } = require("playwright-core");
+const puppeteer = require("puppeteer-core");
 
 const DEFAULT_MAX_RESULTS = 20;
 
@@ -24,15 +24,11 @@ function toCsv(rows) {
 }
 
 async function launchBrowser() {
-  const executablePath = await chromium.executablePath();
-  if (!executablePath) {
-    throw new Error("Chromium executable path was not resolved.");
-  }
-
-  return playwrightChromium.launch({
-    executablePath,
+  return puppeteer.launch({
     args: chromium.args,
-    headless: true
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(),
+    headless: chromium.headless
   });
 }
 
@@ -77,13 +73,9 @@ async function collectPlaceLinks(page, query, maxResults) {
 
 async function firstText(page, selectors) {
   for (const selector of selectors) {
-    const element = page.locator(selector).first();
-    if ((await element.count()) > 0) {
-      const value = (await element.textContent()) || "";
-      const cleaned = value.trim();
-      if (cleaned) {
-        return cleaned;
-      }
+    const text = await page.$$eval(selector, (nodes) => (nodes[0]?.textContent || "").trim());
+    if (text) {
+      return text;
     }
   }
   return "";
@@ -91,12 +83,9 @@ async function firstText(page, selectors) {
 
 async function firstHref(page, selectors) {
   for (const selector of selectors) {
-    const element = page.locator(selector).first();
-    if ((await element.count()) > 0) {
-      const href = await element.getAttribute("href");
-      if (href && href.trim()) {
-        return href.trim();
-      }
+    const href = await page.$$eval(selector, (nodes) => (nodes[0]?.getAttribute("href") || "").trim());
+    if (href) {
+      return href;
     }
   }
   return "";
@@ -115,24 +104,32 @@ async function extractPhone(page) {
   ];
 
   for (const selector of candidates) {
-    const element = page.locator(selector).first();
-    if ((await element.count()) > 0) {
-      const text = ((await element.textContent()) || "").trim();
-      const fromText = firstMatch(text, /\+?\d[\d\s().-]{6,}\d/);
-      if (fromText) {
-        return fromText;
-      }
+    const values = await page.$$eval(
+      selector,
+      (nodes) =>
+        nodes.slice(0, 1).map((n) => ({
+          text: (n.textContent || "").trim(),
+          aria: (n.getAttribute("aria-label") || "").trim(),
+          href: (n.getAttribute("href") || "").trim()
+        }))
+    );
+    if (!values.length) {
+      continue;
+    }
+    const value = values[0];
 
-      const aria = ((await element.getAttribute("aria-label")) || "").trim();
-      const fromAria = firstMatch(aria, /\+?\d[\d\s().-]{6,}\d/);
-      if (fromAria) {
-        return fromAria;
-      }
+    const fromText = firstMatch(value.text, /\+?\d[\d\s().-]{6,}\d/);
+    if (fromText) {
+      return fromText;
+    }
 
-      const href = (await element.getAttribute("href")) || "";
-      if (href.startsWith("tel:")) {
-        return href.replace("tel:", "").trim();
-      }
+    const fromAria = firstMatch(value.aria, /\+?\d[\d\s().-]{6,}\d/);
+    if (fromAria) {
+      return fromAria;
+    }
+
+    if (value.href.startsWith("tel:")) {
+      return value.href.replace("tel:", "").trim();
     }
   }
 
@@ -143,14 +140,11 @@ async function extractPhone(page) {
 async function extractEmail(page, websiteUrl) {
   const emailRegex = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 
-  const mailto = page.locator("a[href^='mailto:']").first();
-  if ((await mailto.count()) > 0) {
-    const href = (await mailto.getAttribute("href")) || "";
-    if (href.toLowerCase().startsWith("mailto:")) {
-      const email = href.slice(7).split("?")[0].trim();
-      if (emailRegex.test(email)) {
-        return email;
-      }
+  const mailto = await page.$$eval("a[href^='mailto:']", (nodes) => (nodes[0]?.getAttribute("href") || "").trim());
+  if (mailto.toLowerCase().startsWith("mailto:")) {
+    const email = mailto.slice(7).split("?")[0].trim();
+    if (emailRegex.test(email)) {
+      return email;
     }
   }
 
@@ -213,13 +207,14 @@ async function extractPlaceDetails(page, url, query) {
 
 async function scrapeGoogleMaps(query, maxResults) {
   const browser = await launchBrowser();
-  const context = await browser.newContext({
-    viewport: { width: 1400, height: 1000 },
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-  });
-  const page = await context.newPage();
+  const page = await browser.newPage();
   const leads = [];
+
+  await page.setViewport({ width: 1400, height: 1000 });
+  await page.setUserAgent(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  );
 
   try {
     const links = await collectPlaceLinks(page, query, maxResults);
@@ -232,6 +227,7 @@ async function scrapeGoogleMaps(query, maxResults) {
       } catch {
         continue;
       }
+
       if (leads.length >= maxResults) {
         break;
       }
@@ -239,7 +235,7 @@ async function scrapeGoogleMaps(query, maxResults) {
     }
     return leads;
   } finally {
-    await context.close();
+    await page.close();
     await browser.close();
   }
 }
