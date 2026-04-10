@@ -45,4 +45,4 @@ RUN mkdir -p outputs
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "gunicorn --workers 2 --threads 2 --timeout 240 --bind 0.0.0.0:${PORT:-5000} app:app"]
+CMD ["sh", "-c", "gunicorn --workers 1 --threads 4 --timeout 240 --bind 0.0.0.0:${PORT:-5000} app:app"]
