@@ -87,7 +87,8 @@ def setup_driver(headless=False):
     if os.getenv("VERCEL"):
         raise RuntimeError(
             "No local Chrome runtime is available in Vercel serverless. "
-            "Set REMOTE_WEBDRIVER_URL to a hosted Selenium/Browserless endpoint, "
+            "Set REMOTE_WEBDRIVER_URL to a hosted Selenium Grid endpoint "
+            "(W3C WebDriver, usually ending with /wd/hub), "
             "or deploy on Render with Chrome installed."
         )
 

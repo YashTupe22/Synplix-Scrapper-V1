@@ -1,30 +1,17 @@
-Install:
-Python 3.x
-pip install -r requirements.txt
+Vercel-native setup (recommended):
 
-CLI usage:
-python "Scrapper By Yash.py"
-python "Scrapper By Yash.py" --query "dentist in mumbai" --max-results 50 --headless --output "my_leads.csv"
+1. Install Node.js 18+.
+2. Run:
+   npm install
+3. Local dev (optional):
+   vercel dev
+4. Deploy to Vercel:
+   vercel --prod
 
-Web app usage:
-python app.py
-Open http://127.0.0.1:5000
-
-CSV output:
-CLI saves CSV in the path you pass with --output (default: google_maps_leads.csv).
-Web app stores generated files inside exports folder and lets you download from browser.
-
-Deploy online:
-Render start command: gunicorn app:app
-After deploy, open your Render URL from any device and generate/download leads.
+How it works:
+- Frontend is served from /public
+- API endpoint is /api/generate (Node.js + Playwright + @sparticuz/chromium)
+- CSV is generated in memory and downloaded from browser (no filesystem dependency)
 
 Important:
-This Selenium scraper needs a runtime that supports launching Chrome/Chromium.
-Vercel serverless functions are not suitable for this workflow by default.
-
-Vercel production option:
-Set REMOTE_WEBDRIVER_URL environment variable to a hosted Selenium endpoint
-(for example, Browserless or a Selenium Grid URL).
-Then deploy the Flask app on Vercel and scraping will run through that remote browser.
-If your provider uses Selenium Grid, endpoint is typically:
-https://your-host/wd/hub
+- max_results is limited to 100 per request for runtime safety.

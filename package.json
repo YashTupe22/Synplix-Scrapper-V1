@@ -1,0 +1,17 @@
+{
+  "name": "synplix-leads-vercel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vercel-native Google Maps leads scraper",
+  "main": "api/generate.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@sparticuz/chromium": "^123.0.1",
+    "playwright-core": "^1.52.0"
+  }
+}
