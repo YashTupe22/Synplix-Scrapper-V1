@@ -10,6 +10,7 @@ const API_BASE = (window.__API_BASE_URL || "").replace(/\/+$/, "");
 
 let pollTimer = null;
 let activeJobId = null;
+let transientPollFailures = 0;
 
 function apiUrl(path) {
   return API_BASE ? `${API_BASE}${path}` : path;
@@ -64,6 +65,10 @@ async function pollJob(jobId) {
   const { data, rawText } = await readResponsePayload(response);
 
   if (!response.ok) {
+    if (response.status >= 500) {
+      throw new Error(`Transient upstream error (${response.status}).`);
+    }
+
     const errorMessage =
       data?.error ||
       data?.message ||
@@ -77,6 +82,7 @@ async function pollJob(jobId) {
   }
 
   if (data.status === "running") {
+    transientPollFailures = 0;
     setStatus("running", `Scraping in progress for \"${data.query}\"...`);
     return;
   }
@@ -113,6 +119,7 @@ form.addEventListener("submit", async (event) => {
   startBtn.disabled = true;
   downloadLink.classList.add("hidden");
   renderResults([]);
+  transientPollFailures = 0;
   setStatus("running", "Starting scraping job...");
 
   try {
@@ -153,6 +160,12 @@ form.addEventListener("submit", async (event) => {
       try {
         await pollJob(activeJobId);
       } catch (error) {
+        if (/Transient upstream error/.test(error.message) && transientPollFailures < 6) {
+          transientPollFailures += 1;
+          setStatus("running", "Backend is waking up. Retrying status check...");
+          return;
+        }
+
         clearInterval(pollTimer);
         pollTimer = null;
         startBtn.disabled = false;
