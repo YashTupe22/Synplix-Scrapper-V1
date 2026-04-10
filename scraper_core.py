@@ -9,6 +9,7 @@ import urllib.parse
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -22,26 +23,66 @@ DEFAULT_OUTPUT_FILE = "google_maps_leads.csv"
 DEFAULT_HEADLESS = False
 
 
+def _remote_endpoint_candidates(url):
+    cleaned = url.rstrip("/")
+    candidates = [cleaned]
+    if not cleaned.endswith("/wd/hub"):
+        candidates.append(f"{cleaned}/wd/hub")
+    return candidates
+
+
 def setup_driver(headless=False):
-    options = webdriver.ChromeOptions()
+    local_options = webdriver.ChromeOptions()
     if headless:
-        options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-setuid-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-zygote")
-    options.add_argument("--single-process")
-    options.add_argument("--remote-debugging-port=9222")
-    options.add_argument("--window-size=1400,1000")
-    options.add_argument(
+        local_options.add_argument("--headless")
+    local_options.add_argument("--no-sandbox")
+    local_options.add_argument("--disable-setuid-sandbox")
+    local_options.add_argument("--disable-dev-shm-usage")
+    local_options.add_argument("--disable-gpu")
+    local_options.add_argument("--no-zygote")
+    local_options.add_argument("--single-process")
+    local_options.add_argument("--remote-debugging-port=9222")
+    local_options.add_argument("--window-size=1400,1000")
+    local_options.add_argument(
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
 
     remote_webdriver_url = (os.getenv("REMOTE_WEBDRIVER_URL") or "").strip()
     if remote_webdriver_url:
-        return webdriver.Remote(command_executor=remote_webdriver_url, options=options)
+        remote_options_minimal = webdriver.ChromeOptions()
+        if headless:
+            remote_options_minimal.add_argument("--headless")
+        remote_options_minimal.set_capability("browserName", "chrome")
+
+        remote_options_full = webdriver.ChromeOptions()
+        if headless:
+            remote_options_full.add_argument("--headless")
+        remote_options_full.add_argument("--window-size=1400,1000")
+        remote_options_full.add_argument(
+            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        )
+        remote_options_full.set_capability("browserName", "chrome")
+
+        remote_errors = []
+        option_profiles = [
+            ("minimal", remote_options_minimal),
+            ("full", remote_options_full),
+        ]
+        for endpoint in _remote_endpoint_candidates(remote_webdriver_url):
+            for profile_name, profile_options in option_profiles:
+                try:
+                    return webdriver.Remote(command_executor=endpoint, options=profile_options)
+                except WebDriverException as exc:
+                    remote_errors.append(f"{endpoint} [{profile_name}] -> {exc.msg}")
+                    continue
+        raise RuntimeError(
+            "Could not start remote Selenium session. Ensure REMOTE_WEBDRIVER_URL points to a "
+            "W3C WebDriver endpoint (often ending with /wd/hub) and your provider plan supports "
+            "Selenium WebDriver sessions. Errors: "
+            + " | ".join(remote_errors)
+        )
 
     if os.getenv("VERCEL"):
         raise RuntimeError(
@@ -54,7 +95,7 @@ def setup_driver(headless=False):
     os.makedirs(cache_root, exist_ok=True)
     cache_manager = DriverCacheManager(root_dir=cache_root)
     service = Service(ChromeDriverManager(cache_manager=cache_manager).install())
-    return webdriver.Chrome(service=service, options=options)
+    return webdriver.Chrome(service=service, options=local_options)
 
 
 def safe_find_text(driver, css_selector=None, xpath=None):

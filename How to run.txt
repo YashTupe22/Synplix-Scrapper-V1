@@ -26,3 +26,5 @@ Vercel production option:
 Set REMOTE_WEBDRIVER_URL environment variable to a hosted Selenium endpoint
 (for example, Browserless or a Selenium Grid URL).
 Then deploy the Flask app on Vercel and scraping will run through that remote browser.
+If your provider uses Selenium Grid, endpoint is typically:
+https://your-host/wd/hub
