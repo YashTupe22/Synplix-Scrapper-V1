@@ -104,7 +104,13 @@ if (form) {
         body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
+      const raw = await response.text();
+      let data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(`Server returned non-JSON response: ${raw.slice(0, 160)}`);
+      }
       if (!response.ok) {
         throw new Error(data.error || "Request failed.");
       }
