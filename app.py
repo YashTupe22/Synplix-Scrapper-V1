@@ -1,4 +1,5 @@
 import os
+import tempfile
 import threading
 import uuid
 from datetime import datetime
@@ -11,8 +12,27 @@ from scraper_backend import run_scrape
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+def _resolve_output_dir():
+    env_output_dir = os.getenv("OUTPUT_DIR", "").strip()
+    if env_output_dir:
+        preferred_dir = env_output_dir
+    elif os.getenv("VERCEL") == "1":
+        preferred_dir = os.path.join(tempfile.gettempdir(), "outputs")
+    else:
+        preferred_dir = os.path.join(BASE_DIR, "outputs")
+
+    try:
+        os.makedirs(preferred_dir, exist_ok=True)
+        return preferred_dir
+    except OSError:
+        fallback_dir = os.path.join(tempfile.gettempdir(), "outputs")
+        os.makedirs(fallback_dir, exist_ok=True)
+        return fallback_dir
+
+
+OUTPUT_DIR = _resolve_output_dir()
 
 DEFAULT_HEADLESS = os.getenv("DEFAULT_HEADLESS", "true").strip().lower() in {
     "1",

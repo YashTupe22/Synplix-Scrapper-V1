@@ -7,8 +7,20 @@
       "destination": "https://synplix-scrapper-v1.onrender.com/api/:path*"
     },
     {
+      "source": "/styles.css",
+      "destination": "/public/styles.css"
+    },
+    {
+      "source": "/app.js",
+      "destination": "/public/app.js"
+    },
+    {
+      "source": "/config.js",
+      "destination": "/public/config.js"
+    },
+    {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/public/index.html"
     }
   ]
 }
