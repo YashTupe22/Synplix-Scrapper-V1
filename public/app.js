@@ -15,6 +15,19 @@ function apiUrl(path) {
   return API_BASE ? `${API_BASE}${path}` : path;
 }
 
+async function readResponsePayload(response) {
+  const rawText = await response.text();
+  if (!rawText) {
+    return { data: null, rawText: "" };
+  }
+
+  try {
+    return { data: JSON.parse(rawText), rawText };
+  } catch {
+    return { data: null, rawText };
+  }
+}
+
 function setStatus(kind, text) {
   statusPill.className = `pill pill-${kind}`;
   statusPill.textContent = kind.charAt(0).toUpperCase() + kind.slice(1);
@@ -48,10 +61,19 @@ function renderResults(rows) {
 
 async function pollJob(jobId) {
   const response = await fetch(apiUrl(`/api/scrape/${jobId}`));
-  const data = await response.json();
+  const { data, rawText } = await readResponsePayload(response);
 
   if (!response.ok) {
-    throw new Error(data.error || "Failed to fetch job status");
+    const errorMessage =
+      data?.error ||
+      data?.message ||
+      (rawText ? rawText.replace(/\s+/g, " ").slice(0, 180) : "") ||
+      `Failed to fetch job status (${response.status})`;
+    throw new Error(errorMessage);
+  }
+
+  if (!data) {
+    throw new Error("Server returned an empty response while checking job status.");
   }
 
   if (data.status === "running") {
@@ -97,6 +119,7 @@ form.addEventListener("submit", async (event) => {
     const response = await fetch(apiUrl("/api/scrape"), {
       method: "POST",
       headers: {
+        Accept: "application/json",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -106,9 +129,18 @@ form.addEventListener("submit", async (event) => {
       }),
     });
 
-    const data = await response.json();
+    const { data, rawText } = await readResponsePayload(response);
     if (!response.ok) {
-      throw new Error(data.error || "Could not start scraping.");
+      const errorMessage =
+        data?.error ||
+        data?.message ||
+        (rawText ? rawText.replace(/\s+/g, " ").slice(0, 180) : "") ||
+        `Could not start scraping (${response.status}).`;
+      throw new Error(errorMessage);
+    }
+
+    if (!data || !data.job_id) {
+      throw new Error("Server did not return a valid job id.");
     }
 
     activeJobId = data.job_id;
