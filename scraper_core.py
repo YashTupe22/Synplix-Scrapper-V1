@@ -3,6 +3,7 @@ from datetime import datetime
 import os
 import random
 import re
+import tempfile
 import time
 import urllib.parse
 
@@ -13,6 +14,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.driver_cache import DriverCacheManager
 
 
 DEFAULT_MAX_RESULTS = 20
@@ -21,7 +23,10 @@ DEFAULT_HEADLESS = False
 
 
 def setup_driver(headless=False):
-    service = Service(ChromeDriverManager().install())
+    cache_root = os.path.join(tempfile.gettempdir(), "wdm_cache")
+    os.makedirs(cache_root, exist_ok=True)
+    cache_manager = DriverCacheManager(root_dir=cache_root)
+    service = Service(ChromeDriverManager(cache_manager=cache_manager).install())
     options = webdriver.ChromeOptions()
     if headless:
         options.add_argument("--headless=new")
