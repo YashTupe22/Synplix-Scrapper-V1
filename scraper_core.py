@@ -28,10 +28,26 @@ def setup_driver(headless=False):
     cache_manager = DriverCacheManager(root_dir=cache_root)
     service = Service(ChromeDriverManager(cache_manager=cache_manager).install())
     options = webdriver.ChromeOptions()
+
+    if os.getenv("VERCEL"):
+        chrome_bin = os.getenv("CHROME_BIN") or os.getenv("GOOGLE_CHROME_BIN")
+        if not chrome_bin or not os.path.exists(chrome_bin):
+            raise RuntimeError(
+                "No Chrome binary is available in this Vercel runtime. "
+                "Deploy this Selenium scraper on Render or another VM/container "
+                "with Google Chrome/Chromium installed."
+            )
+        options.binary_location = chrome_bin
+
     if headless:
-        options.add_argument("--headless=new")
+        options.add_argument("--headless")
     options.add_argument("--no-sandbox")
+    options.add_argument("--disable-setuid-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-zygote")
+    options.add_argument("--single-process")
+    options.add_argument("--remote-debugging-port=9222")
     options.add_argument("--window-size=1400,1000")
     options.add_argument(
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

@@ -17,3 +17,7 @@ Web app stores generated files inside exports folder and lets you download from 
 Deploy online:
 Render start command: gunicorn app:app
 After deploy, open your Render URL from any device and generate/download leads.
+
+Important:
+This Selenium scraper needs a runtime that supports launching Chrome/Chromium.
+Vercel serverless functions are not suitable for this workflow by default.
