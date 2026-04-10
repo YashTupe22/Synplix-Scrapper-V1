@@ -1,4 +1,5 @@
 import os
+import tempfile
 from datetime import datetime
 from uuid import uuid4
 
@@ -14,8 +15,23 @@ from scraper_core import write_to_csv
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-EXPORT_DIR = os.path.join(BASE_DIR, "exports")
-os.makedirs(EXPORT_DIR, exist_ok=True)
+
+
+def resolve_export_dir():
+    candidates = [
+        os.path.join(BASE_DIR, "exports"),
+        os.path.join(tempfile.gettempdir(), "synplix_exports"),
+    ]
+    for candidate in candidates:
+        try:
+            os.makedirs(candidate, exist_ok=True)
+            return candidate
+        except OSError:
+            continue
+    raise OSError("Could not create a writable export directory.")
+
+
+EXPORT_DIR = resolve_export_dir()
 
 
 @app.route("/", methods=["GET"])
