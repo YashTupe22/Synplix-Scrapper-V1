@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: synplix-scraper-backend
+    env: docker
+    plan: starter
+    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: https://YOUR_VERCEL_DOMAIN
+      - key: FORCE_HEADLESS
+        value: "true"
+      - key: FLASK_DEBUG
+        value: "false"

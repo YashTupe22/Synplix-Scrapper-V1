@@ -1,111 +1,98 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Synplix Leads Studio</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Synplix Maps Lead Scraper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <div class="noise"></div>
-  <div class="accent-glow accent-glow-one"></div>
-  <div class="accent-glow accent-glow-two"></div>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
 
-  <main class="shell">
-    <header class="topbar">
-      <div class="brand-block">
-        <span class="brand-dot"></span>
-        <div>
-          <p class="brand-name">Synplix Time</p>
-          <p class="brand-sub">Leads Intelligence</p>
-        </div>
-      </div>
-      <p class="status-pill">Vercel Runtime</p>
-    </header>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>Synplix Maps Lead Scraper</span>
+    </div>
+    <div class="topbar-note">Built for Synplix Infotech Team</div>
+  </header>
 
-    <section class="hero panel">
-      <p class="eyebrow">Google Maps Lead Extraction</p>
-      <h1>Build clean business lead lists in one run.</h1>
-      <p class="tagline">Enter a market query, scrape quality contacts, and ship a CSV to your sales flow in minutes.</p>
-      <div class="metric-row">
-        <article class="metric-card">
-          <p class="metric-label">Live Results</p>
-          <p class="metric-value" id="live-results">0</p>
-        </article>
-        <article class="metric-card">
-          <p class="metric-label">Export Type</p>
-          <p class="metric-value">CSV</p>
-        </article>
-        <article class="metric-card">
-          <p class="metric-label">Runtime</p>
-          <p class="metric-value">Google Places API</p>
-        </article>
-      </div>
+  <main class="container">
+    <section class="hero">
+      <p class="eyebrow">Synplix Infotech Lead Generation Console</p>
+      <h1>Scrape Google Maps Leads in a Cleaner Way</h1>
+      <p class="subtitle">
+        Enter your niche and location, run the scraper, and get structured business leads without using terminal commands.
+      </p>
     </section>
 
-    <section class="panel">
-      <form class="lead-form" id="lead-form">
-        <label>
-          Search Query
-          <input type="text" name="query" placeholder="dentist in mumbai" required>
-          <small>Examples: gym in pune, electrician in gurgaon, skin clinic near andheri.</small>
-        </label>
-
-        <div class="form-grid">
-          <label>
-            Max Results
-            <input type="number" name="max_results" min="1" max="100" value="20" required>
-          </label>
-
-          <label class="check-row">
-            <input type="checkbox" name="headless" checked disabled>
-            <span>Headless Runtime (always on in serverless)</span>
-          </label>
+    <section class="card form-card">
+      <form id="scrapeForm" class="scrape-form">
+        <div class="field">
+          <label for="query">Search Query</label>
+          <input id="query" name="query" type="text" placeholder="e.g. dentist in mumbai" required />
         </div>
 
-        <button type="submit" id="generate-btn">
-          <span class="btn-label">Generate Leads</span>
-          <span class="btn-loading">Running...</span>
-        </button>
+        <div class="row">
+          <div class="field">
+            <label for="maxResults">Max Results</label>
+            <input id="maxResults" name="maxResults" type="number" min="1" max="200" value="20" required />
+          </div>
+
+          <div class="field switch-field">
+            <label for="headless">Headless Mode</label>
+            <label class="switch">
+              <input id="headless" name="headless" type="checkbox" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" id="startBtn" class="btn btn-primary">Start Scraping</button>
+          <button type="button" id="resetBtn" class="btn btn-ghost">Reset</button>
+        </div>
       </form>
-
-      <p class="processing-note">Keep this tab open while scraping. Higher result counts may take longer.</p>
-
-      <div class="alert hidden" id="alert-box"></div>
-
-      <div class="download-box hidden" id="download-box">
-        <div>
-          <p class="download-title">CSV ready for sync</p>
-          <p class="download-file" id="download-file"></p>
-        </div>
-        <a href="#" class="download-link" id="download-link">Download</a>
-      </div>
     </section>
 
-    <section class="table-wrap panel hidden" id="table-wrap">
-      <div class="table-header">
-        <h2>Leads Preview</h2>
-        <p id="records-count">0 records</p>
+    <section class="card status-card">
+      <div class="status-head">
+        <h2>Status</h2>
+        <span id="statusPill" class="pill pill-idle">Idle</span>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Category</th>
-            <th>Rating</th>
-            <th>Phone</th>
-            <th>Email</th>
-            <th>Address</th>
-            <th>Website</th>
-          </tr>
-        </thead>
-        <tbody id="leads-body"></tbody>
-      </table>
+      <p id="statusText" class="status-text">Waiting for input.</p>
+      <a id="downloadLink" class="btn btn-primary hidden" href="#">Download CSV</a>
+    </section>
+
+    <section class="card table-card">
+      <div class="table-head">
+        <h2>Results</h2>
+        <span id="resultCount" class="muted">0 rows</span>
+      </div>
+      <div class="table-wrap">
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Rating</th>
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Website</th>
+              <th>Address</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
     </section>
   </main>
+
+  <script src="/config.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

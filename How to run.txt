@@ -1,18 +1,64 @@
-Vercel-native setup (recommended):
+Project owner:
+Created for Synplix Infotech Team
 
-1. Install Node.js 18+.
-2. Run:
-   npm install
-3. Local dev (optional):
-   vercel dev
-4. Deploy to Vercel:
-   vercel --prod
+Quick start (auto-setup for sharing):
+Windows: double-click start.bat
+or run: python start.py
 
-How it works:
-- Frontend is served from /public
-- API endpoint is /api/generate (Node.js + Google Places API)
-- CSV is generated in memory and downloaded from browser (no filesystem dependency)
+If start.bat fails:
+1. Open terminal in project folder
+2. Run: python --version
+3. Run: python start.py
+4. If Python is missing, reinstall Python 3.x with PATH enabled
 
-Important:
-- max_results is limited to 100 per request for runtime safety.
-- Set GOOGLE_PLACES_API_KEY in Vercel environment variables.
+What auto-setup does:
+1. Creates .venv automatically (first run only)
+2. Installs/updates packages from requirements.txt
+3. Starts the web app on configured host/port (default http://127.0.0.1:5000)
+
+Install (manual):
+Python 3.x
+pip install -r requirements.txt
+
+Run examples:
+python "Scrapper By Yash.py"
+python "Scrapper By Yash.py" --query "dentist in mumbai" --max-results 50 --headless
+python app.py
+
+Web UI usage:
+1. Run: python app.py
+2. Open: http://127.0.0.1:5000
+3. Enter query and max results, then click Start Scraping.
+4. Download CSV after status is Completed.
+
+Deployment (Frontend on Vercel, Backend on Render):
+
+Render backend:
+1. Push project to GitHub
+2. In Render, create a new Web Service from repo
+3. Choose Docker runtime (uses Dockerfile)
+4. Keep health check path: /health
+5. Set env vars:
+	- ALLOWED_ORIGINS=https://YOUR_VERCEL_DOMAIN
+	- FORCE_HEADLESS=true
+	- FLASK_DEBUG=false
+6. Deploy and copy backend URL
+
+Vercel frontend:
+1. Import same repo in Vercel
+2. Root can remain project root
+3. Vercel will serve static files from public/
+4. Update vercel.json destination:
+	https://YOUR_RENDER_BACKEND_URL -> your Render backend URL
+5. Deploy frontend
+
+Post-deploy verification:
+1. Open frontend URL
+2. Submit a scrape job
+3. Confirm status updates and CSV download works
+4. Check backend /health endpoint returns {"status":"ok"}
+
+CSV output:
+By default, leads are saved as google_maps_leads.csv in the current working folder.
+You can choose a custom path with --output.
+From the web app, CSV files are saved in the outputs folder.

@@ -1,115 +1,159 @@
 import os
-import tempfile
+import threading
+import uuid
 from datetime import datetime
-from uuid import uuid4
 
-from flask import Flask
-from flask import render_template
-from flask import request
-from flask import send_from_directory
-from werkzeug.utils import secure_filename
+from flask import Flask, jsonify, render_template, request, send_file
+from flask_cors import CORS
 
-from scraper_core import scrape_google_maps
-from scraper_core import write_to_csv
+from scraper_backend import run_scrape
 
 
 app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+DEFAULT_HEADLESS = os.getenv("DEFAULT_HEADLESS", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
+allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "").strip()
+if allowed_origins_raw:
+    allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",") if origin.strip()]
+    CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
+else:
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+jobs = {}
+jobs_lock = threading.Lock()
 
 
-def resolve_export_dir():
-    if os.getenv("VERCEL"):
-        vercel_tmp = os.path.join(tempfile.gettempdir(), "synplix_exports")
-        os.makedirs(vercel_tmp, exist_ok=True)
-        return vercel_tmp
-
-    candidates = [
-        os.path.join(BASE_DIR, "exports"),
-        os.path.join(tempfile.gettempdir(), "synplix_exports"),
-    ]
-    for candidate in candidates:
-        try:
-            os.makedirs(candidate, exist_ok=True)
-            return candidate
-        except OSError:
-            continue
-    raise OSError("Could not create a writable export directory.")
+def _to_bool(value, default=False):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-EXPORT_DIR = resolve_export_dir()
+def _job_worker(job_id, query, max_results, headless):
+    output_name = f"leads_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{job_id[:8]}.csv"
+    output_path = os.path.join(OUTPUT_DIR, output_name)
+
+    try:
+        leads, saved_csv = run_scrape(
+            query=query,
+            max_results=max_results,
+            output_file=output_path,
+            headless=headless,
+        )
+        with jobs_lock:
+            jobs[job_id]["status"] = "completed"
+            jobs[job_id]["results"] = leads
+            jobs[job_id]["csv_path"] = saved_csv
+    except Exception as exc:
+        with jobs_lock:
+            jobs[job_id]["status"] = "failed"
+            jobs[job_id]["error"] = str(exc)
 
 
-@app.route("/", methods=["GET"])
+@app.route("/")
 def index():
-    return render_template("index.html", leads=[], csv_file="", error="")
+    return render_template("index.html", api_base_url=os.getenv("API_BASE_URL", ""))
 
 
-@app.route("/generate", methods=["POST"])
-def generate():
-    query = (request.form.get("query") or "").strip()
-    max_results_raw = (request.form.get("max_results") or "20").strip()
-    headless = request.form.get("headless") == "on"
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"}), 200
+
+
+@app.route("/api/scrape", methods=["POST"])
+def start_scrape():
+    payload = request.get_json(silent=True) or {}
+    query = str(payload.get("query", "")).strip()
+    max_results_raw = payload.get("max_results", 20)
+    headless = _to_bool(payload.get("headless", DEFAULT_HEADLESS), default=DEFAULT_HEADLESS)
 
     if not query:
-        return render_template("index.html", leads=[], csv_file="", error="Query is required.")
+        return jsonify({"error": "Search query is required."}), 400
 
     try:
         max_results = int(max_results_raw)
-        if max_results < 1:
-            raise ValueError
-    except ValueError:
-        return render_template(
-            "index.html",
-            leads=[],
-            csv_file="",
-            error="Max results must be a positive number.",
-        )
+    except (TypeError, ValueError):
+        return jsonify({"error": "max_results must be a number."}), 400
 
-    try:
-        leads = scrape_google_maps(query=query, max_results=max_results, headless=headless)
-    except Exception as exc:
-        app.logger.exception("Lead scraping failed")
-        return render_template(
-            "index.html",
-            leads=[],
-            csv_file="",
-            error=(
-                "Scraping could not start in this deployment environment. "
-                f"Details: {exc}"
-            ),
-        )
+    if max_results < 1 or max_results > 200:
+        return jsonify({"error": "max_results must be between 1 and 200."}), 400
 
-    if not leads:
-        return render_template(
-            "index.html",
-            leads=[],
-            csv_file="",
-            error="No leads found for this query. Try a different location or business type.",
-        )
+    job_id = str(uuid.uuid4())
+    with jobs_lock:
+        jobs[job_id] = {
+            "status": "running",
+            "query": query,
+            "max_results": max_results,
+            "headless": headless,
+            "created_at": datetime.now().isoformat(),
+            "results": [],
+            "csv_path": "",
+            "error": "",
+        }
 
-    safe_query = secure_filename(query.replace(" ", "_"))[:40] or "leads"
-    filename = f"{safe_query}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:6]}.csv"
-    output_path = os.path.join(EXPORT_DIR, filename)
-    try:
-        written_path = write_to_csv(leads, output_path)
-    except OSError as exc:
-        app.logger.exception("CSV write failed")
-        return render_template(
-            "index.html",
-            leads=[],
-            csv_file="",
-            error=f"Failed to save CSV export. Details: {exc}",
-        )
-    csv_file = os.path.basename(written_path) if written_path else ""
+    thread = threading.Thread(
+        target=_job_worker,
+        args=(job_id, query, max_results, headless),
+        daemon=True,
+    )
+    thread.start()
 
-    return render_template("index.html", leads=leads, csv_file=csv_file, error="")
+    return jsonify({"job_id": job_id, "status": "running"})
 
 
-@app.route("/downloads/<path:filename>", methods=["GET"])
-def download_file(filename):
-    safe_name = os.path.basename(filename)
-    return send_from_directory(EXPORT_DIR, safe_name, as_attachment=True)
+@app.route("/api/scrape/<job_id>", methods=["GET"])
+def scrape_status(job_id):
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if not job:
+            return jsonify({"error": "Job not found."}), 404
+
+        response = {
+            "job_id": job_id,
+            "status": job["status"],
+            "query": job["query"],
+            "max_results": job["max_results"],
+            "created_at": job["created_at"],
+            "count": len(job["results"]),
+            "error": job["error"],
+        }
+
+        if job["status"] == "completed":
+            response["results"] = job["results"]
+            response["download_url"] = f"/api/scrape/{job_id}/download"
+
+    return jsonify(response)
+
+
+@app.route("/api/scrape/<job_id>/download", methods=["GET"])
+def download_results(job_id):
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if not job:
+            return jsonify({"error": "Job not found."}), 404
+        if job["status"] != "completed":
+            return jsonify({"error": "Job is not completed yet."}), 409
+        csv_path = job.get("csv_path", "")
+
+    if not csv_path or not os.path.exists(csv_path):
+        return jsonify({"error": "Result file is missing."}), 404
+
+    return send_file(csv_path, as_attachment=True)
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "5000"))
+    debug = os.getenv("FLASK_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
+    app.run(host=host, port=port, debug=debug)

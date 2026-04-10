@@ -1,132 +1,149 @@
-const form = document.getElementById("lead-form");
-const alertBox = document.getElementById("alert-box");
-const tableWrap = document.getElementById("table-wrap");
-const leadsBody = document.getElementById("leads-body");
-const liveResults = document.getElementById("live-results");
-const recordsCount = document.getElementById("records-count");
-const downloadBox = document.getElementById("download-box");
-const downloadFile = document.getElementById("download-file");
-const downloadLink = document.getElementById("download-link");
+const form = document.getElementById("scrapeForm");
+const statusPill = document.getElementById("statusPill");
+const statusText = document.getElementById("statusText");
+const resultCount = document.getElementById("resultCount");
+const resultsBody = document.getElementById("resultsBody");
+const downloadLink = document.getElementById("downloadLink");
+const startBtn = document.getElementById("startBtn");
+const resetBtn = document.getElementById("resetBtn");
+const API_BASE = (window.__API_BASE_URL || "").replace(/\/+$/, "");
 
-function showError(message) {
-  alertBox.textContent = message;
-  alertBox.classList.remove("hidden");
+let pollTimer = null;
+let activeJobId = null;
+
+function apiUrl(path) {
+  return API_BASE ? `${API_BASE}${path}` : path;
 }
 
-function clearError() {
-  alertBox.textContent = "";
-  alertBox.classList.add("hidden");
+function setStatus(kind, text) {
+  statusPill.className = `pill pill-${kind}`;
+  statusPill.textContent = kind.charAt(0).toUpperCase() + kind.slice(1);
+  statusText.textContent = text;
 }
 
-function resetResults() {
-  leadsBody.innerHTML = "";
-  tableWrap.classList.add("hidden");
-  liveResults.textContent = "0";
-  recordsCount.textContent = "0 records";
-  downloadBox.classList.add("hidden");
-  downloadFile.textContent = "";
-  downloadLink.removeAttribute("href");
-  downloadLink.removeAttribute("download");
-}
+function renderResults(rows) {
+  resultsBody.innerHTML = "";
+  resultCount.textContent = `${rows.length} rows`;
 
-function createDownload(csvBase64, filename) {
-  const binary = atob(csvBase64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  const blob = new Blob([bytes], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  downloadLink.href = url;
-  downloadLink.download = filename;
-  downloadFile.textContent = filename;
-  downloadBox.classList.remove("hidden");
-}
-
-function renderLeads(leads) {
-  leadsBody.innerHTML = "";
-
-  for (const row of leads) {
+  for (const row of rows) {
     const tr = document.createElement("tr");
-    const cells = [
-      row.Name || "",
-      row.Category || "",
-      row.Rating || "",
-      row.Phone || "",
-      row.Email || "",
-      row.Address || ""
-    ];
 
-    for (const value of cells) {
-      const td = document.createElement("td");
-      td.textContent = value;
-      tr.appendChild(td);
-    }
+    const websiteCell = row.Website
+      ? `<a href="${row.Website}" target="_blank" rel="noopener noreferrer">${row.Website}</a>`
+      : "";
 
-    const websiteTd = document.createElement("td");
-    if (row.Website) {
-      const a = document.createElement("a");
-      a.href = row.Website;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.className = "table-link";
-      a.textContent = "Open";
-      websiteTd.appendChild(a);
-    }
-    tr.appendChild(websiteTd);
-    leadsBody.appendChild(tr);
+    tr.innerHTML = `
+      <td>${row.Name || ""}</td>
+      <td>${row.Category || ""}</td>
+      <td>${row.Rating || ""}</td>
+      <td>${row.Phone || ""}</td>
+      <td>${row.Email || ""}</td>
+      <td>${websiteCell}</td>
+      <td>${row.Address || ""}</td>
+    `;
+
+    resultsBody.appendChild(tr);
+  }
+}
+
+async function pollJob(jobId) {
+  const response = await fetch(apiUrl(`/api/scrape/${jobId}`));
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to fetch job status");
   }
 
-  liveResults.textContent = String(leads.length);
-  recordsCount.textContent = `${leads.length} records`;
-  tableWrap.classList.remove("hidden");
+  if (data.status === "running") {
+    setStatus("running", `Scraping in progress for \"${data.query}\"...`);
+    return;
+  }
+
+  clearInterval(pollTimer);
+  pollTimer = null;
+  startBtn.disabled = false;
+
+  if (data.status === "completed") {
+    setStatus("completed", `Completed. Found ${data.count} leads.`);
+    renderResults(data.results || []);
+    downloadLink.href = data.download_url?.startsWith("http")
+      ? data.download_url
+      : apiUrl(data.download_url || "#");
+    downloadLink.classList.remove("hidden");
+    return;
+  }
+
+  setStatus("failed", data.error || "Scrape failed.");
 }
 
-if (form) {
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    clearError();
-    resetResults();
-    document.body.classList.add("is-loading");
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
 
-    try {
-      const formData = new FormData(form);
-      const payload = {
-        query: (formData.get("query") || "").toString(),
-        max_results: (formData.get("max_results") || "20").toString()
-      };
+  const query = document.getElementById("query").value.trim();
+  const maxResults = Number(document.getElementById("maxResults").value);
+  const headless = document.getElementById("headless").checked;
 
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
+  if (!query) {
+    setStatus("failed", "Please enter a search query.");
+    return;
+  }
 
-      const raw = await response.text();
-      let data = {};
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {
-        throw new Error(`Server returned non-JSON response: ${raw.slice(0, 160)}`);
-      }
-      if (!response.ok) {
-        throw new Error(data.error || "Request failed.");
-      }
-      if (data.error) {
-        showError(data.error);
-      }
-      if (Array.isArray(data.leads) && data.leads.length) {
-        renderLeads(data.leads);
-      }
-      if (data.csvBase64 && data.csvFilename) {
-        createDownload(data.csvBase64, data.csvFilename);
-      }
-    } catch (error) {
-      showError(error.message || "Unexpected error while generating leads.");
-    } finally {
-      document.body.classList.remove("is-loading");
+  startBtn.disabled = true;
+  downloadLink.classList.add("hidden");
+  renderResults([]);
+  setStatus("running", "Starting scraping job...");
+
+  try {
+    const response = await fetch(apiUrl("/api/scrape"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query,
+        max_results: maxResults,
+        headless,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Could not start scraping.");
     }
-  });
-}
+
+    activeJobId = data.job_id;
+
+    if (pollTimer) {
+      clearInterval(pollTimer);
+    }
+
+    pollTimer = setInterval(async () => {
+      try {
+        await pollJob(activeJobId);
+      } catch (error) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        startBtn.disabled = false;
+        setStatus("failed", error.message);
+      }
+    }, 2500);
+
+    await pollJob(activeJobId);
+  } catch (error) {
+    startBtn.disabled = false;
+    setStatus("failed", error.message);
+  }
+});
+
+resetBtn.addEventListener("click", () => {
+  form.reset();
+  startBtn.disabled = false;
+  downloadLink.classList.add("hidden");
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+  activeJobId = null;
+  setStatus("idle", "Waiting for input.");
+  renderResults([]);
+});
