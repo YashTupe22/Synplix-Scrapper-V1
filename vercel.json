@@ -4,7 +4,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://YOUR_RENDER_BACKEND_URL/api/:path*"
+      "destination": "https://synplix-scrapper-v1.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
