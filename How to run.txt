@@ -21,3 +21,8 @@ After deploy, open your Render URL from any device and generate/download leads.
 Important:
 This Selenium scraper needs a runtime that supports launching Chrome/Chromium.
 Vercel serverless functions are not suitable for this workflow by default.
+
+Vercel production option:
+Set REMOTE_WEBDRIVER_URL environment variable to a hosted Selenium endpoint
+(for example, Browserless or a Selenium Grid URL).
+Then deploy the Flask app on Vercel and scraping will run through that remote browser.

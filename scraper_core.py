@@ -23,22 +23,7 @@ DEFAULT_HEADLESS = False
 
 
 def setup_driver(headless=False):
-    cache_root = os.path.join(tempfile.gettempdir(), "wdm_cache")
-    os.makedirs(cache_root, exist_ok=True)
-    cache_manager = DriverCacheManager(root_dir=cache_root)
-    service = Service(ChromeDriverManager(cache_manager=cache_manager).install())
     options = webdriver.ChromeOptions()
-
-    if os.getenv("VERCEL"):
-        chrome_bin = os.getenv("CHROME_BIN") or os.getenv("GOOGLE_CHROME_BIN")
-        if not chrome_bin or not os.path.exists(chrome_bin):
-            raise RuntimeError(
-                "No Chrome binary is available in this Vercel runtime. "
-                "Deploy this Selenium scraper on Render or another VM/container "
-                "with Google Chrome/Chromium installed."
-            )
-        options.binary_location = chrome_bin
-
     if headless:
         options.add_argument("--headless")
     options.add_argument("--no-sandbox")
@@ -53,6 +38,22 @@ def setup_driver(headless=False):
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
+
+    remote_webdriver_url = (os.getenv("REMOTE_WEBDRIVER_URL") or "").strip()
+    if remote_webdriver_url:
+        return webdriver.Remote(command_executor=remote_webdriver_url, options=options)
+
+    if os.getenv("VERCEL"):
+        raise RuntimeError(
+            "No local Chrome runtime is available in Vercel serverless. "
+            "Set REMOTE_WEBDRIVER_URL to a hosted Selenium/Browserless endpoint, "
+            "or deploy on Render with Chrome installed."
+        )
+
+    cache_root = os.path.join(tempfile.gettempdir(), "wdm_cache")
+    os.makedirs(cache_root, exist_ok=True)
+    cache_manager = DriverCacheManager(root_dir=cache_root)
+    service = Service(ChromeDriverManager(cache_manager=cache_manager).install())
     return webdriver.Chrome(service=service, options=options)
 
 
