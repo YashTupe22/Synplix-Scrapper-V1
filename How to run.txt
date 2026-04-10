@@ -1,0 +1,19 @@
+Install:
+Python 3.x
+pip install -r requirements.txt
+
+CLI usage:
+python "Scrapper By Yash.py"
+python "Scrapper By Yash.py" --query "dentist in mumbai" --max-results 50 --headless --output "my_leads.csv"
+
+Web app usage:
+python app.py
+Open http://127.0.0.1:5000
+
+CSV output:
+CLI saves CSV in the path you pass with --output (default: google_maps_leads.csv).
+Web app stores generated files inside exports folder and lets you download from browser.
+
+Deploy online:
+Render start command: gunicorn app:app
+After deploy, open your Render URL from any device and generate/download leads.
